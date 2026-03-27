@@ -14,12 +14,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Create zip (git archive)
+      - name: Set up PHP (for Composer)
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          tools: composer
+
+      - name: Install Composer dependencies (no-dev)
+        run: composer install --no-dev --prefer-dist --no-interaction --no-progress
+
+      - name: Create zip (include vendor)
         run: |
           PLUGIN_SLUG="wp_status_api"
           ZIP_NAME="${PLUGIN_SLUG}-${GITHUB_REF_NAME}.zip"
           mkdir -p dist
-          git archive --format=zip --prefix="${PLUGIN_SLUG}/" -o "dist/${ZIP_NAME}" "${GITHUB_REF_NAME}"
+          zip -r "dist/${ZIP_NAME}" . \
+            -x ".git/*" ".github/*" "node_modules/*" "coverage/*" "tmp/*" "temp/*"
           echo "ZIP_NAME=${ZIP_NAME}" >> "$GITHUB_ENV"
 
       - name: Create release and upload zip

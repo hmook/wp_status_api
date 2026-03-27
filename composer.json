@@ -1,10 +1,11 @@
 {
-  "name": "wp-status-api",
+  "name": "hmook/wp-status-api",
   "description": "WordPress plugin: Status API endpoint voor storingsinformatie.",
   "type": "wordpress-plugin",
   "license": "proprietary",
   "require": {
-    "php": ">=7.4"
+    "php": ">=7.4",
+    "yahnis-elsts/plugin-update-checker": "^5.6"
   },
   "autoload": {
     "classmap": [

@@ -1,6 +1,6 @@
 # Status API (WordPress plugin)
 
-Deze plugin exposeert een REST API endpoint met status-/storingsinformatie.
+Deze plugin publiceert een REST API endpoint met status-/storingsinformatie.
 
 ## Installatie
 

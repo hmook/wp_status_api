@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Status API
  * Description: Deze plugin maakt een API end-point aan voor het geven van storings informatie.
- * Version: 0.9.2
+ * Version: 0.9.5
  * Author: Hanno-Wybren Mook
  * License: Proprietary
  */
@@ -10,6 +10,21 @@
 // Voorkom direct toegang tot het bestand
 if (!defined('ABSPATH')) {
     exit;
+}
+
+// Updates via GitHub Releases (Plugin Update Checker)
+if (file_exists(__DIR__ . '/vendor/autoload.php')) {
+    require_once __DIR__ . '/vendor/autoload.php';
+
+    if (class_exists('\\YahnisElsts\\PluginUpdateChecker\\v5\\PucFactory')) {
+        $update_checker = \YahnisElsts\PluginUpdateChecker\v5\PucFactory::buildUpdateChecker(
+            'https://github.com/hmook/wp_status_api/',
+            __FILE__,
+            'wp_status_api'
+        );
+
+        $update_checker->setBranch('main');
+    }
 }
 
 // Hoofdklasse voor de plugin
@@ -285,7 +300,7 @@ class Status_API_Manager {
             <p>Endpoint: <code><?php echo esc_html(site_url('/wp-json/status-api/v1/status')); ?></code></p>
             <p>Methode: <code>GET</code></p>
             <p>Authenticatie: Bearer token of API sleutel/secret</p>
-            
+            <p>Open endpoint: <a href="<?php echo esc_html(site_url('/wp-json/status-api/v1/status')); ?>?api_key=<?php echo esc_html($api_key); ?>&api_secret=<?php echo esc_html($api_secret); ?>" target="_blank"><?php echo esc_html(site_url('/wp-json/status-api/v1/status')); ?>?api_key=<?php echo esc_html($api_key); ?>&api_secret=<?php echo esc_html($api_secret); ?></a></p>
             <h4>Response formaat:</h4>
             <pre>
 {
