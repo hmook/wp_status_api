@@ -39,5 +39,5 @@ curl -H "Authorization: Bearer <TOKEN>" \
 
 ## Licentie
 
-GPL-2.0-or-later (zie `LICENSE`).
+Proprietary (zie `LICENSE`).
 
