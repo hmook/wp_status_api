@@ -1,0 +1,19 @@
+{
+  "name": "bigerror/wp-status-api",
+  "description": "WordPress plugin: Status API endpoint voor storingsinformatie.",
+  "type": "wordpress-plugin",
+  "license": "proprietary",
+  "require": {
+    "php": ">=7.4"
+  },
+  "autoload": {
+    "classmap": [
+      "includes/",
+      "status-api.php"
+    ]
+  },
+  "config": {
+    "sort-packages": true
+  }
+}
+
