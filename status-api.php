@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Status API
  * Description: Deze plugin maakt een API end-point aan voor het geven van storings informatie.
- * Version: 0.9.5
+ * Version: 0.9.7
  * Author: Hanno-Wybren Mook
  * License: Proprietary
  */
