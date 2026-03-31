@@ -1,12 +1,16 @@
 # Changelog
 
+## 0.9.8
+
+- Repo verplaatst naar SURFnet Github omgeving. 
+
 ## 0.9.7
 
 - Verbeterde update-detectie via GitHub Releases.
 
 ## 0.9.5
 
-- Updates are available
+- Aanvullingen op de JSON output waardoor output gelijk is en values indien niet aanwezig 'null'.
 
 ## 0.9.2
 

@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Status API
  * Description: Deze plugin maakt een API end-point aan voor het geven van storings informatie.
- * Version: 0.9.7
+ * Version: 0.9.8
  * Author: Hanno-Wybren Mook
  * License: Proprietary
  */
@@ -18,7 +18,7 @@ if (file_exists(__DIR__ . '/vendor/autoload.php')) {
 
     if (class_exists('\\YahnisElsts\\PluginUpdateChecker\\v5\\PucFactory')) {
         $update_checker = \YahnisElsts\PluginUpdateChecker\v5\PucFactory::buildUpdateChecker(
-            'https://github.com/hmook/wp_status_api',
+            'https://github.com/SURFnet/wp_status_api',
             __FILE__,
             'wp_status_api'
         );
