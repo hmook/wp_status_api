@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Status API
  * Description: Deze plugin maakt een API end-point aan voor het geven van storings informatie.
- * Version: 0.9.8
+ * Version: 0.9.9
  * Author: Hanno-Wybren Mook
  * License: Proprietary
  */
@@ -147,6 +147,7 @@ class Status_API_Manager {
     // API instellingen
     private $api_key_option = 'status_api_key';
     private $api_secret_option = 'status_api_secret';
+    private $api_clients_option = 'status_api_clients';
     
     /**
      * Constructor
@@ -163,9 +164,12 @@ class Status_API_Manager {
      * Plugin activatie
      */
     public function activate() {
-        // Genereer API sleutels als ze nog niet bestaan
-        if (empty(get_option($this->api_key_option)) || empty(get_option($this->api_secret_option))) {
-            $this->generate_api_keys();
+        $this->maybe_migrate_single_key_to_clients();
+
+        // Genereer default client als er nog geen clients bestaan
+        $clients = $this->get_api_clients();
+        if (empty($clients)) {
+            $this->create_api_client('Default');
         }
     }
     
@@ -174,6 +178,147 @@ class Status_API_Manager {
      */
     public function deactivate() {
         // Niets nodig voor deactivatie
+    }
+
+    /**
+     * Haal alle API clients op.
+     *
+     * Structuur:
+     * [
+     *   'api_key_string' => [
+     *     'label' => 'Clientnaam',
+     *     'secret' => '...'
+     *     'revoked' => false,
+     *     'created_at' => 1710000000,
+     *     'secret_regenerated_at' => 1710000000|null,
+     *     'last_used_at' => 1710000000|null
+     *   ],
+     * ]
+     */
+    private function get_api_clients() {
+        $clients = get_option($this->api_clients_option, array());
+        if (!is_array($clients)) {
+            $clients = array();
+        }
+
+        foreach ($clients as $key => $client) {
+            if (!is_array($client)) {
+                unset($clients[$key]);
+                continue;
+            }
+
+            $clients[$key] = wp_parse_args($client, array(
+                'label' => $key,
+                'secret' => '',
+                'revoked' => false,
+                'created_at' => null,
+                'secret_regenerated_at' => null,
+                'last_used_at' => null,
+            ));
+        }
+
+        return $clients;
+    }
+
+    private function save_api_clients($clients) {
+        if (!is_array($clients)) {
+            $clients = array();
+        }
+        update_option($this->api_clients_option, $clients);
+    }
+
+    private function maybe_migrate_single_key_to_clients() {
+        $clients = $this->get_api_clients();
+        if (!empty($clients)) {
+            return;
+        }
+
+        $legacy_key = get_option($this->api_key_option);
+        $legacy_secret = get_option($this->api_secret_option);
+        if (!empty($legacy_key) && !empty($legacy_secret)) {
+            $now = time();
+            $clients = array(
+                $legacy_key => array(
+                    'label' => 'Legacy',
+                    'secret' => $legacy_secret,
+                    'revoked' => false,
+                    'created_at' => $now,
+                    'secret_regenerated_at' => $now,
+                    'last_used_at' => null,
+                ),
+            );
+            $this->save_api_clients($clients);
+        }
+    }
+
+    private function create_api_client($label) {
+        $label = is_string($label) ? trim($label) : '';
+        if ($label === '') {
+            $label = 'Client';
+        }
+
+        $clients = $this->get_api_clients();
+
+        do {
+            $api_key = wp_generate_password(32, false);
+        } while (isset($clients[$api_key]));
+
+        $api_secret = wp_generate_password(64, false);
+
+        $now = time();
+        $clients[$api_key] = array(
+            'label' => $label,
+            'secret' => $api_secret,
+            'revoked' => false,
+            'created_at' => $now,
+            'secret_regenerated_at' => $now,
+            'last_used_at' => null,
+        );
+
+        $this->save_api_clients($clients);
+
+        // Houd legacy options gevuld met "eerste" client voor backwards-compat
+        if (empty(get_option($this->api_key_option)) || empty(get_option($this->api_secret_option))) {
+            update_option($this->api_key_option, $api_key);
+            update_option($this->api_secret_option, $api_secret);
+        }
+
+        return array($api_key, $api_secret);
+    }
+
+    private function revoke_api_client($api_key) {
+        $clients = $this->get_api_clients();
+        if (!isset($clients[$api_key])) {
+            return false;
+        }
+        $clients[$api_key]['revoked'] = true;
+        $this->save_api_clients($clients);
+        return true;
+    }
+
+    private function regenerate_api_client_secret($api_key) {
+        $clients = $this->get_api_clients();
+        if (!isset($clients[$api_key])) {
+            return false;
+        }
+        $clients[$api_key]['secret'] = wp_generate_password(64, false);
+        $clients[$api_key]['revoked'] = false;
+        $clients[$api_key]['secret_regenerated_at'] = time();
+        $this->save_api_clients($clients);
+        return $clients[$api_key]['secret'];
+    }
+
+    private function delete_api_client($api_key) {
+        $clients = $this->get_api_clients();
+        if (!isset($clients[$api_key])) {
+            return false;
+        }
+        if (empty($clients[$api_key]['revoked'])) {
+            return false;
+        }
+        unset($clients[$api_key]);
+        $this->save_api_clients($clients);
+        return true;
     }
     
     /**
@@ -184,17 +329,75 @@ class Status_API_Manager {
         if (!isset($_GET['page']) || $_GET['page'] !== 'status-api-settings') {
             return;
         }
-        
-        // Verwerk het opnieuw genereren van API sleutels
-        if (isset($_POST['regenerate_keys']) && isset($_POST['regenerate_api_keys_nonce']) && 
-            wp_verify_nonce($_POST['regenerate_api_keys_nonce'], 'regenerate_api_keys')) {
-            $this->generate_api_keys();
-            
-            // Redirect naar instellingenpagina
+
+        // Nieuwe client aanmaken
+        if (isset($_POST['create_client']) && isset($_POST['create_client_nonce']) &&
+            wp_verify_nonce($_POST['create_client_nonce'], 'create_client')) {
+            $label = isset($_POST['client_label']) ? sanitize_text_field($_POST['client_label']) : 'Client';
+            $this->create_api_client($label);
+
             wp_redirect(add_query_arg(
                 array(
-                    'page' => 'status-api-settings', 
-                    'message' => 'keys_regenerated'
+                    'page' => 'status-api-settings',
+                    'tab' => 'clients',
+                    'message' => 'client_created'
+                ),
+                admin_url('admin.php')
+            ));
+            exit;
+        }
+
+        // Client intrekken
+        if (isset($_POST['revoke_client']) && isset($_POST['revoke_client_nonce']) &&
+            wp_verify_nonce($_POST['revoke_client_nonce'], 'revoke_client')) {
+            $api_key = isset($_POST['client_key']) ? sanitize_text_field($_POST['client_key']) : '';
+            if ($api_key !== '') {
+                $this->revoke_api_client($api_key);
+            }
+
+            wp_redirect(add_query_arg(
+                array(
+                    'page' => 'status-api-settings',
+                    'tab' => 'clients',
+                    'message' => 'client_revoked'
+                ),
+                admin_url('admin.php')
+            ));
+            exit;
+        }
+
+        // Client secret regenereren
+        if (isset($_POST['regenerate_client_secret']) && isset($_POST['regenerate_client_secret_nonce']) &&
+            wp_verify_nonce($_POST['regenerate_client_secret_nonce'], 'regenerate_client_secret')) {
+            $api_key = isset($_POST['client_key']) ? sanitize_text_field($_POST['client_key']) : '';
+            if ($api_key !== '') {
+                $this->regenerate_api_client_secret($api_key);
+            }
+
+            wp_redirect(add_query_arg(
+                array(
+                    'page' => 'status-api-settings',
+                    'tab' => 'clients',
+                    'message' => 'client_secret_regenerated'
+                ),
+                admin_url('admin.php')
+            ));
+            exit;
+        }
+
+        // Client verwijderen (alleen als hij al ingetrokken is)
+        if (isset($_POST['delete_client']) && isset($_POST['delete_client_nonce']) &&
+            wp_verify_nonce($_POST['delete_client_nonce'], 'delete_client')) {
+            $api_key = isset($_POST['client_key']) ? sanitize_text_field($_POST['client_key']) : '';
+            if ($api_key !== '') {
+                $this->delete_api_client($api_key);
+            }
+
+            wp_redirect(add_query_arg(
+                array(
+                    'page' => 'status-api-settings',
+                    'tab' => 'clients',
+                    'message' => 'client_deleted'
                 ),
                 admin_url('admin.php')
             ));
@@ -214,98 +417,334 @@ class Status_API_Manager {
     }
     
     /**
-     * Valideer Bearer token
-     */
-    private function validate_bearer_token($token, $stored_key, $stored_secret) {
-        // Decodeer de token
-        $decoded = base64_decode($token, true);
-        
-        if ($decoded === false) {
-            return false;
-        }
-        
-        // Split de token in API key en signature
-        $parts = explode(':', $decoded, 2);
-        
-        if (count($parts) !== 2) {
-            return false;
-        }
-        
-        list($api_key, $signature) = $parts;
-        
-        // Controleer of de API key overeenkomt
-        if ($api_key !== $stored_key) {
-            return false;
-        }
-        
-        // Genereer de verwachte signature
-        $expected_signature = hash_hmac('sha256', $api_key, $stored_secret);
-        
-        // Vergelijk de signatures (timing-safe)
-        return hash_equals($expected_signature, $signature);
-    }
-    
-    /**
      * Toon instellingen pagina
      */
     public function display_settings_page() {
-        $api_key = get_option($this->api_key_option);
-        $api_secret = get_option($this->api_secret_option);
-        $bearer_token = $this->generate_bearer_token($api_key, $api_secret);
+        $this->maybe_migrate_single_key_to_clients();
+        $clients = $this->get_api_clients();
+
+        $active_tab = isset($_GET['tab']) ? sanitize_key($_GET['tab']) : 'clients';
+        if (!in_array($active_tab, array('clients', 'docs'), true)) {
+            $active_tab = 'clients';
+        }
+
+        $example_key = '';
+        $example_secret = '';
+        foreach ($clients as $client_key => $client) {
+            if (!empty($client['revoked'])) {
+                continue;
+            }
+            $example_key = $client_key;
+            $example_secret = $client['secret'];
+            break;
+        }
+        $example_bearer_token = (!empty($example_key) && !empty($example_secret)) ? $this->generate_bearer_token($example_key, $example_secret) : '';
         
         ?>
         <div class="wrap">
             <h1>Status API Instellingen</h1>
+
+            <h2 class="nav-tab-wrapper">
+                <a
+                    href="<?php echo esc_url(add_query_arg(array('page' => 'status-api-settings', 'tab' => 'clients'), admin_url('admin.php'))); ?>"
+                    class="nav-tab <?php echo $active_tab === 'clients' ? 'nav-tab-active' : ''; ?>"
+                >
+                    API clients
+                </a>
+                <a
+                    href="<?php echo esc_url(add_query_arg(array('page' => 'status-api-settings', 'tab' => 'docs'), admin_url('admin.php'))); ?>"
+                    class="nav-tab <?php echo $active_tab === 'docs' ? 'nav-tab-active' : ''; ?>"
+                >
+                    Documentatie
+                </a>
+            </h2>
             
-            <?php if (isset($_GET['message']) && $_GET['message'] === 'keys_regenerated') : ?>
+            <?php if (isset($_GET['message']) && $_GET['message'] === 'client_created') : ?>
                 <div class="notice notice-success is-dismissible">
-                    <p>API sleutels opnieuw gegenereerd!</p>
+                    <p>Client aangemaakt!</p>
+                </div>
+            <?php elseif (isset($_GET['message']) && $_GET['message'] === 'client_revoked') : ?>
+                <div class="notice notice-success is-dismissible">
+                    <p>Client ingetrokken!</p>
+                </div>
+            <?php elseif (isset($_GET['message']) && $_GET['message'] === 'client_secret_regenerated') : ?>
+                <div class="notice notice-success is-dismissible">
+                    <p>Client secret opnieuw gegenereerd!</p>
+                </div>
+            <?php elseif (isset($_GET['message']) && $_GET['message'] === 'client_deleted') : ?>
+                <div class="notice notice-success is-dismissible">
+                    <p>Client verwijderd!</p>
                 </div>
             <?php endif; ?>
-            
-            <p>Gebruik deze API sleutels om toegang te krijgen tot de Status API</p>
-            
-            <table class="form-table">
-                <tr>
-                    <th scope="row">API Sleutel</th>
-                    <td>
-                        <input type="text" class="regular-text" value="<?php echo esc_attr($api_key); ?>" readonly />
-                    </td>
-                </tr>
-                <tr>
-                    <th scope="row">API Secret</th>
-                    <td>
-                        <input type="text" class="regular-text" value="<?php echo esc_attr($api_secret); ?>" readonly />
-                    </td>
-                </tr>
-                <tr>
-                    <th scope="row">Bearer Token</th>
-                    <td>
-                        <textarea class="large-text" rows="2" readonly><?php echo esc_textarea($bearer_token); ?></textarea>
-                        <p class="description">Deze token combineert de API sleutel en secret voor veilige authenticatie</p>
-                    </td>
-                </tr>
-            </table>
-            
-            <form method="post" action="">
-                <?php wp_nonce_field('regenerate_api_keys', 'regenerate_api_keys_nonce'); ?>
-                <p>
-                    <button type="submit" name="regenerate_keys" class="button button-primary">
-                        Genereer nieuwe API sleutels
-                    </button>
-                </p>
-            </form>
-            
-            <h2>API Documentatie</h2>
-            <p>De Status API biedt toegang tot de huidige status via het volgende endpoint:</p>
-            
-            <h3>Huidige status ophalen</h3>
-            <p>Endpoint: <code><?php echo esc_html(site_url('/wp-json/status-api/v1/status')); ?></code></p>
-            <p>Methode: <code>GET</code></p>
-            <p>Authenticatie: Bearer token of API sleutel/secret</p>
-            <p>Open endpoint: <a href="<?php echo esc_html(site_url('/wp-json/status-api/v1/status')); ?>?api_key=<?php echo esc_html($api_key); ?>&api_secret=<?php echo esc_html($api_secret); ?>" target="_blank"><?php echo esc_html(site_url('/wp-json/status-api/v1/status')); ?>?api_key=<?php echo esc_html($api_key); ?>&api_secret=<?php echo esc_html($api_secret); ?></a></p>
-            <h4>Response formaat:</h4>
-            <pre>
+
+            <style>
+                .status-api-field { display: flex; gap: 8px; align-items: flex-start; }
+                .status-api-field input.large-text { width: 100%; max-width: 520px; }
+                .status-api-field input.regular-text { width: 100%; max-width: 420px; }
+                .status-api-field textarea.large-text { width: 100%; max-width: 520px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+                .status-api-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+                .status-api-muted { color: #646970; }
+                .status-api-badge { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 999px; font-weight: 600; font-size: 12px; }
+                .status-api-badge--active { background: #e6f6ea; color: #116329; }
+                .status-api-badge--revoked { background: #fbeaea; color: #b32d2e; }
+                .status-api-row--revoked td { background: #fff7f7; }
+                .status-api-label { display: inline-flex; align-items: center; gap: 6px; }
+                .status-api-label .dashicons { color: #646970; font-size: 16px; width: 16px; height: 16px; }
+                .status-api-actions .button .dashicons { margin-right: 4px; vertical-align: text-top; }
+                .status-api-copy.is-copied { border-color: #00a32a; color: #00a32a; }
+                .status-api-hidden { display: none; }
+            </style>
+
+            <?php if ($active_tab === 'clients') : ?>
+                <p class="status-api-muted">Maak per integratie een eigen client aan. Je kunt clients intrekken of (indien ingetrokken) verwijderen.</p>
+
+                <div style="background: #fff; border: 1px solid #dcdcde; border-radius: 8px; padding: 16px; max-width: 1400px; margin: 12px 0 18px;">
+                    <h2 style="margin: 0 0 10px;">
+                        <span class="dashicons dashicons-plus-alt2" style="vertical-align: middle;"></span>
+                        Nieuwe client
+                    </h2>
+                    <form method="post" action="" style="display:flex; gap: 10px; align-items: flex-end; flex-wrap: wrap;">
+                        <?php wp_nonce_field('create_client', 'create_client_nonce'); ?>
+                        <div>
+                            <label for="client_label"><strong>Naam</strong></label><br />
+                            <input type="text" id="client_label" name="client_label" class="regular-text" placeholder="Bijv. Dashboard, Monitor, Klant X" />
+                        </div>
+                        <div>
+                            <button type="submit" name="create_client" class="button button-primary">
+                                <span class="dashicons dashicons-plus-alt2"></span>
+                                Client toevoegen
+                            </button>
+                        </div>
+                    </form>
+                    <p class="status-api-muted" style="margin: 10px 0 0;">
+                        Tip: maak per applicatie/klant een aparte client zodat je eenvoudig kunt intrekken of roteren.
+                    </p>
+                </div>
+
+                <h2>API clients</h2>
+                <table class="widefat striped" style="max-width: 1400px;">
+                    <thead>
+                        <tr>
+                            <th style="width: 160px;">Naam</th>
+                            <th>Credentials</th>
+                            <th style="width: 260px;">Status</th>
+                            <th style="width: 330px;">Acties</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if (empty($clients)) : ?>
+                            <tr><td colspan="4">Nog geen clients.</td></tr>
+                        <?php else : ?>
+                            <?php $i = 0; foreach ($clients as $client_key => $client) : $i++; ?>
+                                <?php
+                                    $client_secret = $client['secret'];
+                                    $client_token = (!empty($client_key) && !empty($client_secret)) ? $this->generate_bearer_token($client_key, $client_secret) : '';
+                                    $client_open_url = add_query_arg(
+                                        array(
+                                            'api_key' => $client_key,
+                                            'api_secret' => $client_secret,
+                                        ),
+                                        site_url('/wp-json/status-api/v1/status')
+                                    );
+                                    $is_revoked = !empty($client['revoked']);
+
+                                    $id_key = 'status_api_client_key_' . $i;
+                                    $id_secret = 'status_api_client_secret_' . $i;
+                                    $id_token = 'status_api_client_token_' . $i;
+                                    $id_url = 'status_api_client_url_' . $i;
+                                    $id_secret_wrap = 'status_api_client_secret_wrap_' . $i;
+                                    $id_token_wrap = 'status_api_client_token_wrap_' . $i;
+                                    $id_url_wrap = 'status_api_client_url_wrap_' . $i;
+                                ?>
+                                <tr class="<?php echo $is_revoked ? 'status-api-row--revoked' : ''; ?>">
+                                    <td>
+                                        <strong><?php echo esc_html($client['label']); ?></strong><br />
+                                        <?php if (!empty($client['created_at'])) : ?>
+                                            <span class="status-api-muted">
+                                                Aangemaakt: <?php echo esc_html(date_i18n('Y-m-d', (int)$client['created_at'])); ?>
+                                            </span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td>
+                                        <div style="margin-bottom: 10px;">
+                                            <div class="status-api-muted"><span class="status-api-label"><span class="dashicons dashicons-admin-network"></span><strong>API key</strong></span></div>
+                                            <div class="status-api-field">
+                                                <input id="<?php echo esc_attr($id_key); ?>" type="text" class="regular-text" value="<?php echo esc_attr($client_key); ?>" readonly />
+                                                <button type="button" class="button status-api-copy" data-copy-target="<?php echo esc_attr($id_key); ?>">Kopieer</button>
+                                            </div>
+                                        </div>
+                                        <div style="margin-bottom: 10px;">
+                                            <div class="status-api-muted"><span class="status-api-label"><span class="dashicons dashicons-lock"></span><strong>API secret</strong></span></div>
+                                            <div class="status-api-field">
+                                                <button type="button" class="button status-api-toggle" data-toggle-target="<?php echo esc_attr($id_secret_wrap); ?>">
+                                                    <span class="dashicons dashicons-visibility"></span>
+                                                    Toon
+                                                </button>
+                                                <button type="button" class="button status-api-copy" data-copy-target="<?php echo esc_attr($id_secret); ?>">Kopieer</button>
+                                            </div>
+                                            <div id="<?php echo esc_attr($id_secret_wrap); ?>" class="status-api-hidden" style="margin-top: 8px;">
+                                                <div class="status-api-field">
+                                                    <input id="<?php echo esc_attr($id_secret); ?>" type="text" class="regular-text" value="<?php echo esc_attr($client_secret); ?>" readonly />
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div style="margin-bottom: 10px;">
+                                            <div class="status-api-muted"><span class="status-api-label"><span class="dashicons dashicons-shield"></span><strong>Bearer token</strong></span></div>
+                                            <div class="status-api-field">
+                                                <button type="button" class="button status-api-toggle" data-toggle-target="<?php echo esc_attr($id_token_wrap); ?>">
+                                                    <span class="dashicons dashicons-visibility"></span>
+                                                    Toon
+                                                </button>
+                                                <button type="button" class="button status-api-copy" data-copy-target="<?php echo esc_attr($id_token); ?>">Kopieer</button>
+                                            </div>
+                                            <div id="<?php echo esc_attr($id_token_wrap); ?>" class="status-api-hidden" style="margin-top: 8px;">
+                                                <div class="status-api-field">
+                                                    <textarea id="<?php echo esc_attr($id_token); ?>" class="large-text" rows="2" readonly><?php echo esc_textarea($client_token); ?></textarea>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <div class="status-api-muted"><span class="status-api-label"><span class="dashicons dashicons-admin-links"></span><strong>Open endpoint</strong></span></div>
+                                            <div class="status-api-field">
+                                                <button type="button" class="button status-api-toggle" data-toggle-target="<?php echo esc_attr($id_url_wrap); ?>">
+                                                    <span class="dashicons dashicons-visibility"></span>
+                                                    Toon
+                                                </button>
+                                                <button type="button" class="button status-api-copy" data-copy-target="<?php echo esc_attr($id_url); ?>">Kopieer</button>
+                                                <a class="button" href="<?php echo esc_url($client_open_url); ?>" target="_blank" rel="noopener noreferrer">
+                                                    <span class="dashicons dashicons-external"></span>
+                                                    Open
+                                                </a>
+                                            </div>
+                                            <div id="<?php echo esc_attr($id_url_wrap); ?>" class="status-api-hidden" style="margin-top: 8px;">
+                                                <div class="status-api-field">
+                                                    <input id="<?php echo esc_attr($id_url); ?>" type="text" class="large-text" value="<?php echo esc_attr($client_open_url); ?>" readonly />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <?php if ($is_revoked) : ?>
+                                            <span class="status-api-badge status-api-badge--revoked">
+                                                <span class="dashicons dashicons-dismiss"></span>
+                                                Ingetrokken
+                                            </span>
+                                        <?php else : ?>
+                                            <span class="status-api-badge status-api-badge--active">
+                                                <span class="dashicons dashicons-yes-alt"></span>
+                                                Actief
+                                            </span>
+                                        <?php endif; ?>
+                                        <?php if (!empty($client['secret_regenerated_at'])) : ?>
+                                            <div class="status-api-muted" style="margin-top: 6px;">
+                                                Secret vernieuwd: <?php echo esc_html(date_i18n('Y-m-d H:i', (int)$client['secret_regenerated_at'])); ?>
+                                            </div>
+                                        <?php endif; ?>
+                                        <?php if (!empty($client['last_used_at'])) : ?>
+                                            <div class="status-api-muted" style="margin-top: 6px;">
+                                                Laatst gebruikt: <?php echo esc_html(date_i18n('Y-m-d H:i', (int)$client['last_used_at'])); ?>
+                                            </div>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td>
+                                        <div class="status-api-actions">
+                                            <form method="post" action="">
+                                                <?php wp_nonce_field('regenerate_client_secret', 'regenerate_client_secret_nonce'); ?>
+                                                <input type="hidden" name="client_key" value="<?php echo esc_attr($client_key); ?>" />
+                                                <button type="submit" name="regenerate_client_secret" class="button">
+                                                    <span class="dashicons dashicons-update"></span>
+                                                    Secret regenereren
+                                                </button>
+                                            </form>
+                                            <form method="post" action="">
+                                                <?php wp_nonce_field('revoke_client', 'revoke_client_nonce'); ?>
+                                                <input type="hidden" name="client_key" value="<?php echo esc_attr($client_key); ?>" />
+                                                <button type="submit" name="revoke_client" class="button">
+                                                    <span class="dashicons dashicons-no-alt"></span>
+                                                    Intrekken
+                                                </button>
+                                            </form>
+                                            <form method="post" action="">
+                                                <?php wp_nonce_field('delete_client', 'delete_client_nonce'); ?>
+                                                <input type="hidden" name="client_key" value="<?php echo esc_attr($client_key); ?>" />
+                                                <button type="submit" name="delete_client" class="button" <?php echo $is_revoked ? '' : 'disabled'; ?>>
+                                                    <span class="dashicons dashicons-trash"></span>
+                                                    Verwijderen
+                                                </button>
+                                            </form>
+                                        </div>
+                                        <?php if (!$is_revoked) : ?>
+                                            <div class="status-api-muted" style="margin-top: 6px;">Verwijderen kan pas na intrekken.</div>
+                                        <?php endif; ?>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+
+                <script>
+                    (function() {
+                        function copyTextFromEl(el) {
+                            if (!el) return;
+                            var text = (el.value !== undefined) ? el.value : (el.textContent || '');
+                            if (navigator.clipboard && navigator.clipboard.writeText) {
+                                navigator.clipboard.writeText(text);
+                                return;
+                            }
+                            el.focus();
+                            if (el.select) {
+                                el.select();
+                            }
+                            try { document.execCommand('copy'); } catch (e) {}
+                            if (window.getSelection) {
+                                window.getSelection().removeAllRanges();
+                            }
+                        }
+
+                        document.addEventListener('click', function(e) {
+                            var btn = e.target.closest('.status-api-copy');
+                            if (!btn) return;
+                            e.preventDefault();
+                            var id = btn.getAttribute('data-copy-target');
+                            copyTextFromEl(document.getElementById(id));
+                            btn.classList.add('is-copied');
+                            btn.textContent = 'Gekopieerd';
+                            window.setTimeout(function() {
+                                btn.classList.remove('is-copied');
+                                btn.textContent = 'Kopieer';
+                            }, 1200);
+                        });
+
+                        document.addEventListener('click', function(e) {
+                            var btn = e.target.closest('.status-api-toggle');
+                            if (!btn) return;
+                            e.preventDefault();
+                            var id = btn.getAttribute('data-toggle-target');
+                            var el = document.getElementById(id);
+                            if (!el) return;
+                            var isHidden = el.classList.contains('status-api-hidden');
+                            if (isHidden) {
+                                el.classList.remove('status-api-hidden');
+                                btn.innerHTML = '<span class="dashicons dashicons-hidden"></span> Verberg';
+                            } else {
+                                el.classList.add('status-api-hidden');
+                                btn.innerHTML = '<span class="dashicons dashicons-visibility"></span> Toon';
+                            }
+                        });
+                    })();
+                </script>
+            <?php else : ?>
+                <h2>API Documentatie</h2>
+                <p>De Status API biedt toegang tot de huidige status via het volgende endpoint:</p>
+                
+                <h3>Huidige status ophalen</h3>
+                <p>Endpoint: <code><?php echo esc_html(site_url('/wp-json/status-api/v1/status')); ?></code></p>
+                <p>Methode: <code>GET</code></p>
+                <p>Authenticatie: Bearer token (aanbevolen) of API sleutel/secret.</p>
+                <p>Tip: ga naar het tabblad “API clients” en kopieer daar de Bearer token of de “Open endpoint” URL.</p>
+                <h4>Response formaat:</h4>
+                <pre>
 {
     "title": "Status titel",
     "text": "Status beschrijving",
@@ -315,40 +754,40 @@ class Status_API_Manager {
     "statusExpiryDate": "2025-12-31 23:59" (alleen bij groene status met vervaldatum),
     "statusExpiryTimestamp": 1234567890 (alleen bij groene status met vervaldatum)
 }
-            </pre>
-            
-            <h3>Authenticatie voorbeelden</h3>
-            
-            <h4>Methode 1: Bearer Token (Aanbevolen)</h4>
-            <p>Gebruik de gecombineerde Bearer token voor maximale veiligheid:</p>
-            <pre>
-Authorization: Bearer <?php echo esc_html($bearer_token); ?>
-            </pre>
-            
-            <h4>Methode 2: API Sleutel en Secret</h4>
-            <p>Voeg de volgende parameters toe aan je aanvraag:</p>
-            <pre>
-api_key=<?php echo esc_html($api_key); ?>&api_secret=<?php echo esc_html($api_secret); ?>
-            </pre>
-            
-            <h3>Voorbeeld API aanroepen</h3>
-            
-            <h4>cURL voorbeeld met Bearer token:</h4>
-            <pre>
-curl -H "Authorization: Bearer <?php echo esc_html($bearer_token); ?>" \
+                </pre>
+                
+                <h3>Authenticatie voorbeelden</h3>
+                
+                <h4>Methode 1: Bearer Token (Aanbevolen)</h4>
+                <p>Gebruik de gecombineerde Bearer token voor maximale veiligheid:</p>
+                <pre>
+Authorization: Bearer <?php echo esc_html($example_bearer_token); ?>
+                </pre>
+                
+                <h4>Methode 2: API Sleutel en Secret</h4>
+                <p>Voeg de volgende parameters toe aan je aanvraag:</p>
+                <pre>
+api_key=<?php echo esc_html($example_key); ?>&api_secret=<?php echo esc_html($example_secret); ?>
+                </pre>
+                
+                <h3>Voorbeeld API aanroepen</h3>
+                
+                <h4>cURL voorbeeld met Bearer token:</h4>
+                <pre>
+curl -H "Authorization: Bearer <?php echo esc_html($example_bearer_token); ?>" \
      <?php echo esc_html(site_url('/wp-json/status-api/v1/status')); ?>
-            </pre>
-            
-            <h4>JavaScript fetch voorbeeld:</h4>
-            <pre>
+                </pre>
+                
+                <h4>JavaScript fetch voorbeeld:</h4>
+                <pre>
 fetch('<?php echo esc_js(site_url('/wp-json/status-api/v1/status')); ?>', {
     headers: {
-        'Authorization': 'Bearer <?php echo esc_js($bearer_token); ?>'
+        'Authorization': 'Bearer <?php echo esc_js($example_bearer_token); ?>'
     }
 })
 .then(response => response.json())
 .then(data => console.log(data));
-            </pre>
+                </pre>
             
             <h2>Bearer Token Beveiliging</h2>
             <p>De Bearer token wordt gegenereerd met <strong>HMAC-SHA256</strong> voor maximale beveiliging:</p>
@@ -382,8 +821,8 @@ fetch('<?php echo esc_js(site_url('/wp-json/status-api/v1/status')); ?>', {
                 
                 <h4>Voorbeeld berekening:</h4>
                 <pre style="background-color: #fff; padding: 10px; border: 1px solid #ddd;">
-API Sleutel: <?php echo substr(esc_html($api_key), 0, 16); ?>... (verkort voor veiligheid)
-API Secret: <?php echo substr(esc_html($api_secret), 0, 16); ?>... (verkort voor veiligheid)
+API Sleutel: <?php echo substr(esc_html($example_key), 0, 16); ?>... (verkort voor veiligheid)
+API Secret: <?php echo substr(esc_html($example_secret), 0, 16); ?>... (verkort voor veiligheid)
 
 HMAC-SHA256: hash_hmac('sha256', api_key, api_secret)
 Resultaat: [64 karakters hex]
@@ -391,6 +830,7 @@ Resultaat: [64 karakters hex]
 Bearer Token: base64_encode(api_key + ':' + hmac_signature)
                 </pre>
             </div>
+            <?php endif; ?>
         </div>
         <?php
     }
@@ -410,15 +850,17 @@ Bearer Token: base64_encode(api_key + ':' + hmac_signature)
      * Controleer API authenticatie
      */
     public function check_api_authentication($request) {
-        $stored_key = get_option($this->api_key_option);
-        $stored_secret = get_option($this->api_secret_option);
+        $this->maybe_migrate_single_key_to_clients();
+        $clients = $this->get_api_clients();
         
         // METHODE 1: Check voor API key en secret in query parameters
         $api_key = $request->get_param('api_key');
         $api_secret = $request->get_param('api_secret');
         
         if (!empty($api_key) && !empty($api_secret)) {
-            if ($api_key === $stored_key && $api_secret === $stored_secret) {
+            if (isset($clients[$api_key]) && empty($clients[$api_key]['revoked']) && hash_equals($clients[$api_key]['secret'], $api_secret)) {
+                $clients[$api_key]['last_used_at'] = time();
+                $this->save_api_clients($clients);
                 return true;
             }
         }
@@ -429,8 +871,10 @@ Bearer Token: base64_encode(api_key + ':' + hmac_signature)
         if ($auth_header && preg_match('/Bearer\s+(.*)$/i', $auth_header, $matches)) {
             $token = trim($matches[1]);
             
-            // Valideer de Bearer token
-            if ($this->validate_bearer_token($token, $stored_key, $stored_secret)) {
+            $client_key = $this->validate_bearer_token_multi($token, $clients);
+            if ($client_key !== false) {
+                $clients[$client_key]['last_used_at'] = time();
+                $this->save_api_clients($clients);
                 return true;
             }
         }
@@ -441,6 +885,34 @@ Bearer Token: base64_encode(api_key + ':' + hmac_signature)
             'Toegang geweigerd. Geldige authenticatie vereist.',
             array('status' => 401)
         );
+    }
+
+    /**
+     * Valideer Bearer token tegen alle clients.
+     * Retourneert api_key bij succes, anders false.
+     */
+    private function validate_bearer_token_multi($token, $clients) {
+        $decoded = base64_decode($token, true);
+        if ($decoded === false) {
+            return false;
+        }
+
+        $parts = explode(':', $decoded, 2);
+        if (count($parts) !== 2) {
+            return false;
+        }
+
+        list($api_key, $signature) = $parts;
+        if (empty($api_key) || empty($signature)) {
+            return false;
+        }
+
+        if (!isset($clients[$api_key]) || !empty($clients[$api_key]['revoked'])) {
+            return false;
+        }
+
+        $expected_signature = hash_hmac('sha256', $api_key, $clients[$api_key]['secret']);
+        return hash_equals($expected_signature, $signature) ? $api_key : false;
     }
     
     /**
@@ -502,9 +974,8 @@ Bearer Token: base64_encode(api_key + ':' + hmac_signature)
      * Genereer nieuwe API sleutels
      */
     public function generate_api_keys() {
-        $api_key = wp_generate_password(32, false);
-        $api_secret = wp_generate_password(64, false);
-        
+        // Legacy methode: behoud als wrapper om een default client te maken
+        list($api_key, $api_secret) = $this->create_api_client('Default');
         update_option($this->api_key_option, $api_key);
         update_option($this->api_secret_option, $api_secret);
     }
