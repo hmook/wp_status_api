@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.9.1
+
+- Compactere API clients UI met verborgen credentials en Dependabot voor Composer updates.
+
 ## 0.9.9
 
 - Meerdere Clients mogelijkheid toegevoegd en opschonen van de AdminUI. 
