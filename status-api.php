@@ -478,10 +478,14 @@ class Status_API_Manager {
             <?php endif; ?>
 
             <style>
-                .status-api-field { display: flex; gap: 8px; align-items: flex-start; }
+                .status-api-field { display: flex; gap: 8px; align-items: flex-start; flex-wrap: wrap; }
                 .status-api-field input.large-text { width: 100%; max-width: 520px; }
                 .status-api-field input.regular-text { width: 100%; max-width: 420px; }
                 .status-api-field textarea.large-text { width: 100%; max-width: 520px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+                .status-api-cred-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+                .status-api-cred-actions { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
+                .status-api-cred-actions .button { margin: 0; white-space: nowrap; }
+                .status-api-cred-value { margin: 0 0 10px; }
                 .status-api-actions { display: flex; gap: 6px; flex-wrap: wrap; }
                 .status-api-muted { color: #646970; }
                 .status-api-badge { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 999px; font-weight: 600; font-size: 12px; }
@@ -566,46 +570,48 @@ class Status_API_Manager {
                                         <?php endif; ?>
                                     </td>
                                     <td>
-                                        <div style="margin-bottom: 10px;">
-                                            <div class="status-api-muted"><span class="status-api-label"><span class="dashicons dashicons-admin-network"></span><strong>API key</strong></span></div>
-                                            <div class="status-api-field">
-                                                <input id="<?php echo esc_attr($id_key); ?>" type="text" class="regular-text" value="<?php echo esc_attr($client_key); ?>" readonly />
+                                        <div class="status-api-cred-row">
+                                            <span class="status-api-label"><span class="dashicons dashicons-admin-network"></span><strong>API key</strong></span>
+                                            <div class="status-api-cred-actions">
+                                                <button type="button" class="button status-api-toggle" data-toggle-target="<?php echo esc_attr($id_key); ?>_wrap">
+                                                    <span class="dashicons dashicons-visibility"></span>
+                                                    Toon
+                                                </button>
                                                 <button type="button" class="button status-api-copy" data-copy-target="<?php echo esc_attr($id_key); ?>">Kopieer</button>
                                             </div>
                                         </div>
-                                        <div style="margin-bottom: 10px;">
-                                            <div class="status-api-muted"><span class="status-api-label"><span class="dashicons dashicons-lock"></span><strong>API secret</strong></span></div>
-                                            <div class="status-api-field">
+                                        <div id="<?php echo esc_attr($id_key); ?>_wrap" class="status-api-cred-value status-api-hidden">
+                                            <input id="<?php echo esc_attr($id_key); ?>" type="text" class="large-text" value="<?php echo esc_attr($client_key); ?>" readonly style="width:100%;" />
+                                        </div>
+                                        <div class="status-api-cred-row">
+                                            <span class="status-api-label"><span class="dashicons dashicons-lock"></span><strong>API secret</strong></span>
+                                            <div class="status-api-cred-actions">
                                                 <button type="button" class="button status-api-toggle" data-toggle-target="<?php echo esc_attr($id_secret_wrap); ?>">
                                                     <span class="dashicons dashicons-visibility"></span>
                                                     Toon
                                                 </button>
                                                 <button type="button" class="button status-api-copy" data-copy-target="<?php echo esc_attr($id_secret); ?>">Kopieer</button>
                                             </div>
-                                            <div id="<?php echo esc_attr($id_secret_wrap); ?>" class="status-api-hidden" style="margin-top: 8px;">
-                                                <div class="status-api-field">
-                                                    <input id="<?php echo esc_attr($id_secret); ?>" type="text" class="regular-text" value="<?php echo esc_attr($client_secret); ?>" readonly />
-                                                </div>
-                                            </div>
                                         </div>
-                                        <div style="margin-bottom: 10px;">
-                                            <div class="status-api-muted"><span class="status-api-label"><span class="dashicons dashicons-shield"></span><strong>Bearer token</strong></span></div>
-                                            <div class="status-api-field">
+                                        <div id="<?php echo esc_attr($id_secret_wrap); ?>" class="status-api-cred-value status-api-hidden">
+                                            <input id="<?php echo esc_attr($id_secret); ?>" type="text" class="large-text" value="<?php echo esc_attr($client_secret); ?>" readonly style="width:100%;" />
+                                        </div>
+                                        <div class="status-api-cred-row">
+                                            <span class="status-api-label"><span class="dashicons dashicons-shield"></span><strong>Bearer token</strong></span>
+                                            <div class="status-api-cred-actions">
                                                 <button type="button" class="button status-api-toggle" data-toggle-target="<?php echo esc_attr($id_token_wrap); ?>">
                                                     <span class="dashicons dashicons-visibility"></span>
                                                     Toon
                                                 </button>
                                                 <button type="button" class="button status-api-copy" data-copy-target="<?php echo esc_attr($id_token); ?>">Kopieer</button>
                                             </div>
-                                            <div id="<?php echo esc_attr($id_token_wrap); ?>" class="status-api-hidden" style="margin-top: 8px;">
-                                                <div class="status-api-field">
-                                                    <textarea id="<?php echo esc_attr($id_token); ?>" class="large-text" rows="2" readonly><?php echo esc_textarea($client_token); ?></textarea>
-                                                </div>
-                                            </div>
                                         </div>
-                                        <div>
-                                            <div class="status-api-muted"><span class="status-api-label"><span class="dashicons dashicons-admin-links"></span><strong>Open endpoint</strong></span></div>
-                                            <div class="status-api-field">
+                                        <div id="<?php echo esc_attr($id_token_wrap); ?>" class="status-api-cred-value status-api-hidden">
+                                            <textarea id="<?php echo esc_attr($id_token); ?>" class="large-text" rows="2" readonly style="width:100%;"><?php echo esc_textarea($client_token); ?></textarea>
+                                        </div>
+                                        <div class="status-api-cred-row">
+                                            <span class="status-api-label"><span class="dashicons dashicons-admin-links"></span><strong>Open endpoint</strong></span>
+                                            <div class="status-api-cred-actions">
                                                 <button type="button" class="button status-api-toggle" data-toggle-target="<?php echo esc_attr($id_url_wrap); ?>">
                                                     <span class="dashicons dashicons-visibility"></span>
                                                     Toon
@@ -616,11 +622,9 @@ class Status_API_Manager {
                                                     Open
                                                 </a>
                                             </div>
-                                            <div id="<?php echo esc_attr($id_url_wrap); ?>" class="status-api-hidden" style="margin-top: 8px;">
-                                                <div class="status-api-field">
-                                                    <input id="<?php echo esc_attr($id_url); ?>" type="text" class="large-text" value="<?php echo esc_attr($client_open_url); ?>" readonly />
-                                                </div>
-                                            </div>
+                                        </div>
+                                        <div id="<?php echo esc_attr($id_url_wrap); ?>" class="status-api-cred-value status-api-hidden">
+                                            <input id="<?php echo esc_attr($id_url); ?>" type="text" class="large-text" value="<?php echo esc_attr($client_open_url); ?>" readonly style="width:100%;" />
                                         </div>
                                     </td>
                                     <td>
