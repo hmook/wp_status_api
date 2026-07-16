@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.9
+
+- Meerdere Clients mogelijkheid toegevoegd en opschonen van de AdminUI. 
+
 ## 0.9.8
 
 - Repo verplaatst naar SURFnet Github omgeving. 
