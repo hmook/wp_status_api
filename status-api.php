@@ -2,7 +2,11 @@
 /**
  * Plugin Name: Status API
  * Description: Deze plugin maakt een API end-point aan voor het geven van storings informatie.
+<<<<<<< HEAD
  * Version: 0.9.9
+=======
+ * Version: 0.9.9.1
+>>>>>>> 6424a225ff9f37098395df2ab0b5add5a8984523
  * Author: Hanno-Wybren Mook
  * License: Proprietary
  */
@@ -329,9 +333,12 @@ class Status_API_Manager {
         if (!isset($_GET['page']) || $_GET['page'] !== 'status-api-settings') {
             return;
         }
+<<<<<<< HEAD
         if (!current_user_can('manage_options')) {
             return;
         }
+=======
+>>>>>>> 6424a225ff9f37098395df2ab0b5add5a8984523
 
         // Nieuwe client aanmaken
         if (isset($_POST['create_client']) && isset($_POST['create_client_nonce']) &&
@@ -481,10 +488,21 @@ class Status_API_Manager {
             <?php endif; ?>
 
             <style>
+<<<<<<< HEAD
                 .status-api-field { display: flex; gap: 8px; align-items: flex-start; }
                 .status-api-field input.large-text { width: 100%; max-width: 520px; }
                 .status-api-field input.regular-text { width: 100%; max-width: 420px; }
                 .status-api-field textarea.large-text { width: 100%; max-width: 520px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+=======
+                .status-api-field { display: flex; gap: 8px; align-items: flex-start; flex-wrap: wrap; }
+                .status-api-field input.large-text { width: 100%; max-width: 520px; }
+                .status-api-field input.regular-text { width: 100%; max-width: 420px; }
+                .status-api-field textarea.large-text { width: 100%; max-width: 520px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+                .status-api-cred-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+                .status-api-cred-actions { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
+                .status-api-cred-actions .button { margin: 0; white-space: nowrap; }
+                .status-api-cred-value { margin: 0 0 10px; }
+>>>>>>> 6424a225ff9f37098395df2ab0b5add5a8984523
                 .status-api-actions { display: flex; gap: 6px; flex-wrap: wrap; }
                 .status-api-muted { color: #646970; }
                 .status-api-badge { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 999px; font-weight: 600; font-size: 12px; }
@@ -569,6 +587,7 @@ class Status_API_Manager {
                                         <?php endif; ?>
                                     </td>
                                     <td>
+<<<<<<< HEAD
                                         <div style="margin-bottom: 10px;">
                                             <div class="status-api-muted"><span class="status-api-label"><span class="dashicons dashicons-admin-network"></span><strong>API key</strong></span></div>
                                             <div class="status-api-field">
@@ -579,12 +598,31 @@ class Status_API_Manager {
                                         <div style="margin-bottom: 10px;">
                                             <div class="status-api-muted"><span class="status-api-label"><span class="dashicons dashicons-lock"></span><strong>API secret</strong></span></div>
                                             <div class="status-api-field">
+=======
+                                        <div class="status-api-cred-row">
+                                            <span class="status-api-label"><span class="dashicons dashicons-admin-network"></span><strong>API key</strong></span>
+                                            <div class="status-api-cred-actions">
+                                                <button type="button" class="button status-api-toggle" data-toggle-target="<?php echo esc_attr($id_key); ?>_wrap">
+                                                    <span class="dashicons dashicons-visibility"></span>
+                                                    Toon
+                                                </button>
+                                                <button type="button" class="button status-api-copy" data-copy-target="<?php echo esc_attr($id_key); ?>">Kopieer</button>
+                                            </div>
+                                        </div>
+                                        <div id="<?php echo esc_attr($id_key); ?>_wrap" class="status-api-cred-value status-api-hidden">
+                                            <input id="<?php echo esc_attr($id_key); ?>" type="text" class="large-text" value="<?php echo esc_attr($client_key); ?>" readonly style="width:100%;" />
+                                        </div>
+                                        <div class="status-api-cred-row">
+                                            <span class="status-api-label"><span class="dashicons dashicons-lock"></span><strong>API secret</strong></span>
+                                            <div class="status-api-cred-actions">
+>>>>>>> 6424a225ff9f37098395df2ab0b5add5a8984523
                                                 <button type="button" class="button status-api-toggle" data-toggle-target="<?php echo esc_attr($id_secret_wrap); ?>">
                                                     <span class="dashicons dashicons-visibility"></span>
                                                     Toon
                                                 </button>
                                                 <button type="button" class="button status-api-copy" data-copy-target="<?php echo esc_attr($id_secret); ?>">Kopieer</button>
                                             </div>
+<<<<<<< HEAD
                                             <div id="<?php echo esc_attr($id_secret_wrap); ?>" class="status-api-hidden" style="margin-top: 8px;">
                                                 <div class="status-api-field">
                                                     <input id="<?php echo esc_attr($id_secret); ?>" type="text" class="regular-text" value="<?php echo esc_attr($client_secret); ?>" readonly />
@@ -594,12 +632,22 @@ class Status_API_Manager {
                                         <div style="margin-bottom: 10px;">
                                             <div class="status-api-muted"><span class="status-api-label"><span class="dashicons dashicons-shield"></span><strong>Bearer token</strong></span></div>
                                             <div class="status-api-field">
+=======
+                                        </div>
+                                        <div id="<?php echo esc_attr($id_secret_wrap); ?>" class="status-api-cred-value status-api-hidden">
+                                            <input id="<?php echo esc_attr($id_secret); ?>" type="text" class="large-text" value="<?php echo esc_attr($client_secret); ?>" readonly style="width:100%;" />
+                                        </div>
+                                        <div class="status-api-cred-row">
+                                            <span class="status-api-label"><span class="dashicons dashicons-shield"></span><strong>Bearer token</strong></span>
+                                            <div class="status-api-cred-actions">
+>>>>>>> 6424a225ff9f37098395df2ab0b5add5a8984523
                                                 <button type="button" class="button status-api-toggle" data-toggle-target="<?php echo esc_attr($id_token_wrap); ?>">
                                                     <span class="dashicons dashicons-visibility"></span>
                                                     Toon
                                                 </button>
                                                 <button type="button" class="button status-api-copy" data-copy-target="<?php echo esc_attr($id_token); ?>">Kopieer</button>
                                             </div>
+<<<<<<< HEAD
                                             <div id="<?php echo esc_attr($id_token_wrap); ?>" class="status-api-hidden" style="margin-top: 8px;">
                                                 <div class="status-api-field">
                                                     <textarea id="<?php echo esc_attr($id_token); ?>" class="large-text" rows="2" readonly><?php echo esc_textarea($client_token); ?></textarea>
@@ -609,6 +657,15 @@ class Status_API_Manager {
                                         <div>
                                             <div class="status-api-muted"><span class="status-api-label"><span class="dashicons dashicons-admin-links"></span><strong>Open endpoint</strong></span></div>
                                             <div class="status-api-field">
+=======
+                                        </div>
+                                        <div id="<?php echo esc_attr($id_token_wrap); ?>" class="status-api-cred-value status-api-hidden">
+                                            <textarea id="<?php echo esc_attr($id_token); ?>" class="large-text" rows="2" readonly style="width:100%;"><?php echo esc_textarea($client_token); ?></textarea>
+                                        </div>
+                                        <div class="status-api-cred-row">
+                                            <span class="status-api-label"><span class="dashicons dashicons-admin-links"></span><strong>Open endpoint</strong></span>
+                                            <div class="status-api-cred-actions">
+>>>>>>> 6424a225ff9f37098395df2ab0b5add5a8984523
                                                 <button type="button" class="button status-api-toggle" data-toggle-target="<?php echo esc_attr($id_url_wrap); ?>">
                                                     <span class="dashicons dashicons-visibility"></span>
                                                     Toon
@@ -619,11 +676,17 @@ class Status_API_Manager {
                                                     Open
                                                 </a>
                                             </div>
+<<<<<<< HEAD
                                             <div id="<?php echo esc_attr($id_url_wrap); ?>" class="status-api-hidden" style="margin-top: 8px;">
                                                 <div class="status-api-field">
                                                     <input id="<?php echo esc_attr($id_url); ?>" type="text" class="large-text" value="<?php echo esc_attr($client_open_url); ?>" readonly />
                                                 </div>
                                             </div>
+=======
+                                        </div>
+                                        <div id="<?php echo esc_attr($id_url_wrap); ?>" class="status-api-cred-value status-api-hidden">
+                                            <input id="<?php echo esc_attr($id_url); ?>" type="text" class="large-text" value="<?php echo esc_attr($client_open_url); ?>" readonly style="width:100%;" />
+>>>>>>> 6424a225ff9f37098395df2ab0b5add5a8984523
                                         </div>
                                     </td>
                                     <td>
@@ -890,6 +953,7 @@ Bearer Token: base64_encode(api_key + ':' + hmac_signature)
      * Controleer API authenticatie
      */
     public function check_api_authentication($request) {
+<<<<<<< HEAD
         $ip = $this->get_client_ip();
 
         if ($this->is_rate_limited($ip)) {
@@ -903,6 +967,11 @@ Bearer Token: base64_encode(api_key + ':' + hmac_signature)
         $this->maybe_migrate_single_key_to_clients();
         $clients = $this->get_api_clients();
 
+=======
+        $this->maybe_migrate_single_key_to_clients();
+        $clients = $this->get_api_clients();
+        
+>>>>>>> 6424a225ff9f37098395df2ab0b5add5a8984523
         // METHODE 1: Check voor API key en secret in query parameters
         $api_key = $request->get_param('api_key');
         $api_secret = $request->get_param('api_secret');
@@ -911,7 +980,10 @@ Bearer Token: base64_encode(api_key + ':' + hmac_signature)
             if (isset($clients[$api_key]) && empty($clients[$api_key]['revoked']) && hash_equals($clients[$api_key]['secret'], $api_secret)) {
                 $clients[$api_key]['last_used_at'] = time();
                 $this->save_api_clients($clients);
+<<<<<<< HEAD
                 $this->clear_auth_failures($ip);
+=======
+>>>>>>> 6424a225ff9f37098395df2ab0b5add5a8984523
                 return true;
             }
         }
@@ -921,12 +993,19 @@ Bearer Token: base64_encode(api_key + ':' + hmac_signature)
 
         if ($auth_header && preg_match('/Bearer\s+(.*)$/i', $auth_header, $matches)) {
             $token = trim($matches[1]);
+<<<<<<< HEAD
 
+=======
+            
+>>>>>>> 6424a225ff9f37098395df2ab0b5add5a8984523
             $client_key = $this->validate_bearer_token_multi($token, $clients);
             if ($client_key !== false) {
                 $clients[$client_key]['last_used_at'] = time();
                 $this->save_api_clients($clients);
+<<<<<<< HEAD
                 $this->clear_auth_failures($ip);
+=======
+>>>>>>> 6424a225ff9f37098395df2ab0b5add5a8984523
                 return true;
             }
         }
