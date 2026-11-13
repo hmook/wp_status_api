@@ -5,7 +5,7 @@
   "license": "proprietary",
   "require": {
     "php": ">=7.4",
-    "yahnis-elsts/plugin-update-checker": "^5.7"
+    "yahnis-elsts/plugin-update-checker": "^6.0"
   },
   "config": {
     "sort-packages": true
